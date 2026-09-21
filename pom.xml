@@ -59,10 +59,7 @@
 		<!-- Spring AI - Ollama                               -->
 		<!-- ================================================= -->
 
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-model-ollama</artifactId>
-        </dependency>
+        
         <dependency>
     <groupId>org.springframework.ai</groupId>
     <artifactId>spring-ai-vector-store</artifactId>
@@ -71,7 +68,10 @@
     <groupId>org.springframework.ai</groupId>
     <artifactId>spring-ai-starter-model-google-genai</artifactId>
 </dependency>
-
+<dependency>
+    <groupId>org.springframework.ai</groupId>
+    <artifactId>spring-ai-starter-model-google-genai-embedding</artifactId>
+</dependency>
 		<!-- ================================================= -->
 		<!-- MySQL                                             -->
 		<!-- ================================================= -->
