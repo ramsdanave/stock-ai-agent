@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>StockAI Agent</title>
+
+    <link rel="stylesheet"
+          href="style.css">
+
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- ============================= -->
+    <!-- SIDEBAR -->
+    <!-- ============================= -->
+
+    <aside class="sidebar">
+
+        <div class="brand">
+
+            <div class="brand-icon">
+                📈
+            </div>
+
+            <div>
+                <div class="brand-name">
+                    StockAI
+                </div>
+
+                <div class="brand-subtitle">
+                    Market Intelligence
+                </div>
+            </div>
+
+        </div>
+
+
+        <button id="newChatButton"
+                class="new-chat-button">
+
+            <span>＋</span>
+
+            New Analysis
+
+        </button>
+
+
+        <div class="sidebar-section">
+
+            <div class="sidebar-title">
+                ANALYSIS TOOLS
+            </div>
+
+            <button class="quick-action"
+                    data-question="Analyze INFY">
+
+                <span>📊</span>
+
+                Analyze Stock
+
+            </button>
+
+
+            <button class="quick-action"
+                    data-question="Which IT stock is strongest based on the available data?">
+
+                <span>🏆</span>
+
+                Best IT Stock
+
+            </button>
+
+
+            <button class="quick-action"
+                    data-question="Compare INFY and TCS">
+
+                <span>⚖️</span>
+
+                Compare Stocks
+
+            </button>
+
+
+            <button class="quick-action"
+                    data-question="Show me the IT stocks available">
+
+                <span>💼</span>
+
+                Sector Stocks
+
+            </button>
+
+        </div>
+
+
+        <div class="sidebar-bottom">
+
+            <div class="status">
+
+                <span class="status-dot"></span>
+
+                <span>
+                    AI Engine Online
+                </span>
+
+            </div>
+
+            <div class="status-small">
+                Llama 3.2 • Local
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <!-- ============================= -->
+    <!-- MAIN CONTENT -->
+    <!-- ============================= -->
+
+    <main class="main">
+
+        <!-- HEADER -->
+
+        <header class="topbar">
+
+            <div>
+
+                <div class="page-title">
+                    Stock AI Agent
+                </div>
+
+                <div class="page-subtitle">
+                    AI-powered stock analysis assistant
+                </div>
+
+            </div>
+
+
+            <div class="connection">
+
+                <span class="connection-dot"></span>
+
+                Local Agent
+
+            </div>
+
+        </header>
+
+
+        <!-- CHAT AREA -->
+
+        <section id="chatArea"
+                 class="chat-area">
+
+
+            <!-- WELCOME -->
+
+            <div id="welcome"
+                 class="welcome">
+
+                <div class="welcome-icon">
+                    📈
+                </div>
+
+                <h1>
+                    What would you like to analyze?
+                </h1>
+
+                <p>
+                    Ask StockAI about stocks, sectors,
+                    momentum, volume and quantitative analysis.
+                </p>
+
+
+                <div class="suggestions">
+
+                    <button class="suggestion"
+                            data-question="Analyze INFY">
+
+                        <strong>
+                            Analyze INFY
+                        </strong>
+
+                        <span>
+                            Get quantitative analysis
+                        </span>
+
+                    </button>
+
+
+                    <button class="suggestion"
+                            data-question="Which IT stock is strongest based on the available data?">
+
+                        <strong>
+                            Best IT stock
+                        </strong>
+
+                        <span>
+                            Find the strongest stock
+                        </span>
+
+                    </button>
+
+
+                    <button class="suggestion"
+                            data-question="Compare INFY and TCS">
+
+                        <strong>
+                            Compare stocks
+                        </strong>
+
+                        <span>
+                            Compare two companies
+                        </span>
+
+                    </button>
+
+
+                    <button class="suggestion"
+                            data-question="Show me the IT stocks available">
+
+                        <strong>
+                            IT sector
+                        </strong>
+
+                        <span>
+                            View available IT stocks
+                        </span>
+
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- INPUT -->
+
+        <section class="input-section">
+
+            <div class="input-wrapper">
+
+                <textarea
+                    id="messageInput"
+                    placeholder="Ask about a stock, sector or market analysis..."
+                    rows="1"></textarea>
+
+
+                <button id="sendButton"
+                        class="send-button">
+
+                    <span>
+                        Send
+                    </span>
+
+                    <span>
+                        ➤
+                    </span>
+
+                </button>
+
+            </div>
+
+
+            <div class="input-footer">
+
+                StockAI uses available market data and
+                quantitative analysis. It does not guarantee
+                future returns.
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<script src="app.js"></script>
+
+</body>
+
+</html>
