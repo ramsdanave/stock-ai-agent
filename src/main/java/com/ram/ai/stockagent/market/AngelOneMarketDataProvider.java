@@ -4,6 +4,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -19,6 +20,8 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -836,10 +839,18 @@ public class AngelOneMarketDataProvider implements MarketDataProvider {
                             .GET()
                             .build();
 
-            HttpResponse<String> response =
+            /*
+             * IMPORTANT: Stream the large instrument master.
+             *
+             * The old implementation used BodyHandlers.ofString()
+             * and then objectMapper.readTree(responseBody), which
+             * kept the complete 150k+ record JSON document in memory.
+             * That can exhaust a 512 MB Render instance.
+             */
+            HttpResponse<InputStream> response =
                     httpClient.send(
                             request,
-                            HttpResponse.BodyHandlers.ofString()
+                            HttpResponse.BodyHandlers.ofInputStream()
                     );
 
             System.out.println(
@@ -850,251 +861,186 @@ public class AngelOneMarketDataProvider implements MarketDataProvider {
             if (response.statusCode() < 200
                     || response.statusCode() >= 300) {
 
-                throw new RuntimeException(
-                        "Angel One instrument master HTTP error: "
-                                + response.statusCode()
-                );
-            }
-
-            String responseBody =
-                    response.body();
-
-            if (responseBody == null
-                    || responseBody.isBlank()) {
-
-                throw new RuntimeException(
-                        "Angel One instrument master returned empty data."
-                );
-            }
-
-            /*
-             * Remove UTF-8 BOM if the downloaded file contains one.
-             */
-            if (!responseBody.isEmpty()
-                    && responseBody.charAt(0) == '\uFEFF') {
-
-                responseBody =
-                        responseBody.substring(1);
-            }
-
-            responseBody =
-                    responseBody.trim();
-
-            JsonNode root =
-                    objectMapper.readTree(
-                            responseBody
+                try (InputStream ignored = response.body()) {
+                    throw new RuntimeException(
+                            "Angel One instrument master HTTP error: "
+                                    + response.statusCode()
                     );
-
-            if (!root.isArray()) {
-
-                throw new RuntimeException(
-                        "Angel One instrument master response is not an array."
-                );
+                }
             }
 
-            System.out.println(
-                    "Instrument master records received: "
-                            + root.size()
-            );
-
             /*
-             * Temporary map.
-             *
-             * We replace the existing cache only after
-             * successful processing.
+             * Build a new cache and replace the active cache only
+             * after the complete instrument master is processed.
              */
             Map<String, InstrumentInfo> newInstrumentMap =
                     new HashMap<>();
 
             int totalRecords = 0;
-
             int nseRecords = 0;
-
             int equityRecords = 0;
-
             int usableRecords = 0;
 
-            for (JsonNode instrument : root) {
+            try (
+                    InputStream inputStream = response.body();
+                    JsonParser parser =
+                            objectMapper.getFactory()
+                                    .createParser(inputStream)
+            ) {
 
-                totalRecords++;
+                JsonToken firstToken = parser.nextToken();
 
-                if (instrument == null
-                        || !instrument.isObject()) {
+                if (firstToken != JsonToken.START_ARRAY) {
 
-                    continue;
-                }
-
-                String exchange =
-                        readText(
-                                instrument,
-                                "exch_seg"
-                        );
-
-                if (exchange == null
-                        || !"NSE".equalsIgnoreCase(
-                                exchange.trim()
-                        )) {
-
-                    continue;
-                }
-
-                nseRecords++;
-
-                String token =
-                        readText(
-                                instrument,
-                                "token"
-                        );
-
-                String tradingSymbol =
-                        readText(
-                                instrument,
-                                "symbol"
-                        );
-
-                String name =
-                        readText(
-                                instrument,
-                                "name"
-                        );
-
-                String instrumentType =
-                        readText(
-                                instrument,
-                                "instrumenttype"
-                        );
-
-                /*
-                 * Token is mandatory.
-                 */
-                if (token == null
-                        || token.isBlank()) {
-
-                    continue;
-                }
-
-                /*
-                 * Trading symbol is mandatory.
-                 */
-                if (tradingSymbol == null
-                        || tradingSymbol.isBlank()) {
-
-                    continue;
-                }
-
-                tradingSymbol =
-                        tradingSymbol.trim();
-
-                /*
-                 * We want normal NSE equity symbols.
-                 *
-                 * Angel One's master generally identifies
-                 * equity instruments with -EQ.
-                 *
-                 * We intentionally do NOT rely only on
-                 * instrumenttype because the master format
-                 * can vary between datasets.
-                 */
-                boolean looksLikeEquity =
-                        tradingSymbol
-                                .toUpperCase()
-                                .endsWith("-EQ")
-                        || (
-                                instrumentType != null
-                                && (
-                                        "EQ".equalsIgnoreCase(
-                                                instrumentType.trim()
-                                        )
-                                        || "EQUITY".equalsIgnoreCase(
-                                                instrumentType.trim()
-                                        )
-                                )
-                        );
-
-                if (!looksLikeEquity) {
-                    continue;
-                }
-
-                equityRecords++;
-
-                InstrumentInfo info =
-                        new InstrumentInfo(
-                                exchange.trim().toUpperCase(),
-                                tradingSymbol,
-                                token.trim(),
-                                name
-                        );
-
-                /*
-                 * Example:
-                 *
-                 * Angel One:
-                 *     symbol = INFY-EQ
-                 *
-                 * Application key:
-                 *     INFY
-                 */
-                String baseSymbol =
-                        removeEqSuffix(
-                                tradingSymbol
-                        );
-
-                if (!baseSymbol.isBlank()) {
-
-                    newInstrumentMap.put(
-                            baseSymbol,
-                            info
+                    throw new RuntimeException(
+                            "Angel One instrument master response "
+                                    + "is not a JSON array."
                     );
                 }
 
                 /*
-                 * Also store the exact trading symbol.
+                 * Process one instrument at a time.
                  *
-                 * This allows direct resolution of:
-                 * INFY-EQ
+                 * readTree(parser) reads only the current JSON object;
+                 * it does NOT build a tree for the complete array.
                  */
-                newInstrumentMap.put(
-                        normalizeSymbol(
-                                tradingSymbol
-                        ),
-                        info
-                );
+                while (parser.nextToken() != JsonToken.END_ARRAY) {
 
-                /*
-                 * Store the company name as an additional
-                 * lookup key when available.
-                 *
-                 * Example:
-                 * Infosys Limited -> INFY instrument
-                 *
-                 * This does NOT replace natural-language
-                 * processing. It is simply an additional
-                 * instrument lookup key.
-                 */
-                if (name != null
-                        && !name.isBlank()) {
+                    totalRecords++;
 
-                    String normalizedName =
-                            normalizeSymbol(name);
+                    JsonNode instrument =
+                            objectMapper.readTree(parser);
 
-                    if (!normalizedName.isBlank()) {
+                    if (instrument == null
+                            || !instrument.isObject()) {
 
-                        newInstrumentMap.putIfAbsent(
-                                normalizedName,
+                        continue;
+                    }
+
+                    String exchange =
+                            readText(
+                                    instrument,
+                                    "exch_seg"
+                            );
+
+                    if (exchange == null
+                            || !"NSE".equalsIgnoreCase(
+                                    exchange.trim()
+                            )) {
+
+                        continue;
+                    }
+
+                    nseRecords++;
+
+                    String token =
+                            readText(
+                                    instrument,
+                                    "token"
+                            );
+
+                    String tradingSymbol =
+                            readText(
+                                    instrument,
+                                    "symbol"
+                            );
+
+                    String name =
+                            readText(
+                                    instrument,
+                                    "name"
+                            );
+
+                    String instrumentType =
+                            readText(
+                                    instrument,
+                                    "instrumenttype"
+                            );
+
+                    if (token == null
+                            || token.isBlank()) {
+
+                        continue;
+                    }
+
+                    if (tradingSymbol == null
+                            || tradingSymbol.isBlank()) {
+
+                        continue;
+                    }
+
+                    tradingSymbol =
+                            tradingSymbol.trim();
+
+                    boolean looksLikeEquity =
+                            tradingSymbol
+                                    .toUpperCase()
+                                    .endsWith("-EQ")
+                            || (
+                                    instrumentType != null
+                                    && (
+                                            "EQ".equalsIgnoreCase(
+                                                    instrumentType.trim()
+                                            )
+                                            || "EQUITY".equalsIgnoreCase(
+                                                    instrumentType.trim()
+                                            )
+                                    )
+                            );
+
+                    if (!looksLikeEquity) {
+                        continue;
+                    }
+
+                    equityRecords++;
+
+                    InstrumentInfo info =
+                            new InstrumentInfo(
+                                    exchange.trim().toUpperCase(),
+                                    tradingSymbol,
+                                    token.trim(),
+                                    name
+                            );
+
+                    String baseSymbol =
+                            removeEqSuffix(
+                                    tradingSymbol
+                            );
+
+                    if (!baseSymbol.isBlank()) {
+
+                        newInstrumentMap.put(
+                                baseSymbol,
                                 info
                         );
                     }
-                }
 
-                usableRecords++;
+                    newInstrumentMap.put(
+                            normalizeSymbol(
+                                    tradingSymbol
+                            ),
+                            info
+                    );
+
+                    if (name != null
+                            && !name.isBlank()) {
+
+                        String normalizedName =
+                                normalizeSymbol(name);
+
+                        if (!normalizedName.isBlank()) {
+
+                            newInstrumentMap.putIfAbsent(
+                                    normalizedName,
+                                    info
+                            );
+                        }
+                    }
+
+                    usableRecords++;
+                }
             }
 
-            /*
-             * IMPORTANT:
-             *
-             * If Angel One returned an array but our parser
-             * found zero usable instruments, fail clearly.
-             */
             if (newInstrumentMap.isEmpty()) {
 
                 throw new RuntimeException(
@@ -1109,9 +1055,6 @@ public class AngelOneMarketDataProvider implements MarketDataProvider {
                 );
             }
 
-            /*
-             * Replace cache atomically.
-             */
             instrumentCache =
                     newInstrumentMap;
 
@@ -1148,9 +1091,7 @@ public class AngelOneMarketDataProvider implements MarketDataProvider {
             );
 
             /*
-             * Verify the requested common case if present.
-             * This is only diagnostic; there is no hardcoded
-             * token here.
+             * Diagnostic only. No token is hardcoded here.
              */
             InstrumentInfo infy =
                     newInstrumentMap.get("INFY");
