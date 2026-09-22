@@ -13,7 +13,10 @@ const newChatButton = document.getElementById("newChatButton");
 //
 // =========================================================
 
-const API_URL = "http://localhost:8080";
+// Same-origin API.
+// Local:  http://localhost:8080/api/chat
+// Render: https://your-service.onrender.com/api/chat
+const API_URL = window.location.origin;
 
 let conversationId = "web-" + Date.now();
 
